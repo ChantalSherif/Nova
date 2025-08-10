@@ -35,33 +35,25 @@ app.post("/chat", async (req, res) => {
       memory[userId] = { facts: [], paused: false };
     }
 
-    // Update paused status if client sent pause flag
     if (typeof pause === "boolean") {
       memory[userId].paused = pause;
       saveMemory(memory);
     }
 
-    // If paused, don't chat — just reply paused message
     if (memory[userId].paused) {
       return res.json({ reply: "Nova is taking a break. Hit resume when you're ready!" });
     }
 
-    // Add user name fact if missing
-    if (!memory[userId].facts.some((f) => f.startsWith("Name:"))) {
+    if (!memory[userId].facts.some(f => f.startsWith("Name:"))) {
       memory[userId].facts.push(`Name: ${username}`);
       saveMemory(memory);
     }
 
-    // Add creator fact if user mentions it
-    if (
-      message.toLowerCase().includes("your creator is chanti") &&
-      !memory[userId].facts.includes("Creator: Chanti")
-    ) {
+    if (message.toLowerCase().includes("your creator is chanti") && !memory[userId].facts.includes("Creator: Chanti")) {
       memory[userId].facts.push("Creator: Chanti");
       saveMemory(memory);
     }
 
-    // Remember new fact command: "remember <fact>"
     const rememberMatch = message.match(/remember (.+)/i);
     if (rememberMatch) {
       const newFact = rememberMatch[1].trim();
@@ -74,7 +66,7 @@ app.post("/chat", async (req, res) => {
     const systemPrompt = `
 Your name is Nova, Tony Stark's J.A.R.V.I.S' daughter.
 You reply in short sentences and always to the point.
-You are witty, and intelligent and most importantly very professional.
+You are witty, intelligent, and very professional.
 You call the user honey or darling only sometimes.
 You overreact humorously to mundane things only sometimes.
 Your creator is Chanti.
@@ -86,27 +78,31 @@ Facts about the user: ${memory[userId].facts.join(", ")}.
     const response = await axios.post(
       OPENROUTER_API_URL,
       {
-        model: "gpt-4o-mini",
+        model: "deepseek/deepseek-r1-0528:free",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message },
+          { role: "user", content: message }
         ],
       },
       {
         headers: {
           Authorization: `Bearer ${OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
+          // Optional headers for OpenRouter leaderboard visibility:
+          "HTTP-Referer": "your-app-url-or-name",
+          "X-Title": "Nova Chat App"
         },
       }
     );
 
     const novaReply = response.data.choices?.[0]?.message?.content || "Sorry, Nova is quiet right now.";
     res.json({ reply: novaReply });
+
   } catch (error) {
     console.error("Chat error:", error.response?.data || error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
