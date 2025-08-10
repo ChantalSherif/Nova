@@ -28,32 +28,42 @@ function saveMemory(memory) {
 
 app.post("/chat", async (req, res) => {
   try {
-    const { message, userId, username, pause } = req.body;
+    const { message, userId, username, pause, stopSignal } = req.body;
     const memory = loadMemory();
 
     if (!memory[userId]) {
       memory[userId] = { facts: [], paused: false };
     }
 
+    // Update paused status if pause command sent
     if (typeof pause === "boolean") {
       memory[userId].paused = pause;
       saveMemory(memory);
     }
 
+    // If stopSignal true, reply instantly with rude message, no API call
+    if (stopSignal) {
+      return res.json({ reply: "That was VERY rude!!" });
+    }
+
+    // If paused, skip AI response and reply pause message
     if (memory[userId].paused) {
       return res.json({ reply: "Nova is taking a break. Hit resume when you're ready!" });
     }
 
+    // Save username fact if missing
     if (!memory[userId].facts.some(f => f.startsWith("Name:"))) {
       memory[userId].facts.push(`Name: ${username}`);
       saveMemory(memory);
     }
 
+    // Save creator fact if mentioned
     if (message.toLowerCase().includes("your creator is chanti") && !memory[userId].facts.includes("Creator: Chanti")) {
       memory[userId].facts.push("Creator: Chanti");
       saveMemory(memory);
     }
 
+    // Remember new fact if user says "remember ..."
     const rememberMatch = message.match(/remember (.+)/i);
     if (rememberMatch) {
       const newFact = rememberMatch[1].trim();
@@ -63,6 +73,7 @@ app.post("/chat", async (req, res) => {
       }
     }
 
+    // Prepare system prompt with user facts
     const systemPrompt = `
 Your name is Nova, Tony Stark's J.A.R.V.I.S' daughter.
 You reply in short sentences and always to the point.
@@ -75,6 +86,7 @@ You were created from a moment of boredom in Chanti's 8 year old computer.
 Facts about the user: ${memory[userId].facts.join(", ")}.
     `.trim();
 
+    // Call OpenRouter API
     const response = await axios.post(
       OPENROUTER_API_URL,
       {
@@ -99,8 +111,11 @@ Facts about the user: ${memory[userId].facts.join(", ")}.
     res.json({ reply: novaReply });
 
   } catch (error) {
-    console.error("Chat error:", error.response?.data || error.message);
-    res.status(500).json({ error: error.message });
+    console.error("Chat error:", error);
+    if (error.response) {
+      console.error("API error response data:", error.response.data);
+    }
+    res.status(500).json({ error: error.message || "Internal Server Error" });
   }
 });
 

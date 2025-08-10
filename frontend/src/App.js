@@ -46,9 +46,8 @@ function App() {
         message: input,
         userId,
         username,
-        pause: false,  // resume talking when sending message
+        pause: false,  // resume talking
       });
-      console.log("API response:", res.data);
 
       if (!res.data.reply) {
         setMessages((prev) => [
@@ -80,22 +79,25 @@ function App() {
     }
   };
 
-  // Stop typing mid-sentence + pause backend, so Nova stops instantly
+  // Stop typing mid-sentence + send stopSignal = true for rude reply
   const stopTyping = async () => {
     if (loading) {
       typingAbort.current = true; // abort typing animation immediately
       setLoading(false); // enable input immediately
 
-      // Tell backend to pause Nova
       try {
-        await axios.post("http://localhost:5000/chat", {
+        const res = await axios.post("http://localhost:5000/chat", {
           message: "",
           userId,
           username,
-          pause: true, // pause Nova
+          stopSignal: true, // signal rude reply
         });
+
+        if (res.data.reply) {
+          setMessages((prev) => [...prev, { role: "assistant", content: res.data.reply }]);
+        }
       } catch (e) {
-        console.error("Failed to pause Nova", e);
+        console.error("Failed to send stopSignal:", e);
       }
     }
   };
@@ -152,7 +154,7 @@ function App() {
               Send
             </button>
             <button onClick={stopTyping} disabled={!loading} style={{ marginLeft: 8 }}>
-              Stop
+              Shut up Nova!
             </button>
           </div>
         </>
